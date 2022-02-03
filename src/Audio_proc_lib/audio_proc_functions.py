@@ -18,14 +18,14 @@ import time
 
 def load_music():
 
-    ytbe_flag = int(input('Press 2 if you want to load song segment of youtube\n Press 1 if you want to load a song segment of your pc\nPress 0 if you want to load the default song segment\n: ') )
+    ytbe_flag = int(input('Press 2 if you want to load song segment of youtube\n Press 1 if you want to load a song segment of your pc\n: ') )
+
+    #GETTING TRACK FROM YOUTUBE-------------------------------------
+    def my_hook(d):
+        if d['status'] == 'finished':
+            print('Done downloading...')
 
     if ytbe_flag==2:
-        #GETTING TRACK FROM YOUTUBE-------------------------------------
-        def my_hook(d):
-            if d['status'] == 'finished':
-                print('Done downloading...')
-
 
         url = input("Give the url of the song in youtube:") #@param {type:"string"}
         start = int(input("Give the start sec:")) #@param {type:"number"}
@@ -58,7 +58,21 @@ def load_music():
 
     
     # else:
-    #    audio,s = librosa.load('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/musicradar-bass-guitar-samples/Bass/bass_tones_long&tremolo/long002.wav',sr=44100) 
+    # #    audio,s = librosa.load('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/musicradar-bass-guitar-samples/Bass/bass_tones_long&tremolo/long002.wav',sr=44100) 
+    #     url = "https://www.youtube.com/watch?v=qY2WHqvRlFY"
+    #     ydl_opts = {
+    #         'format': 'bestaudio/best',
+    #         'postprocessors': [{
+    #             'key': 'FFmpegExtractAudio',
+    #             'preferredcodec': 'wav',
+    #             'preferredquality': '44100',
+    #         }],
+    #         'outtmpl': '%(title)s.wav',
+    #         'progress_hooks': [my_hook],
+    #     }
+    #     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+    #         info = ydl.extract_info(url, download=False)
+
 
     if ytbe_flag:
         if not(stop>len(audio)*(1/s)):
