@@ -78,7 +78,7 @@ setup(
         'numpy',
         'soundfile',
         'librosa',
-        'matplotlib',
+        #'matplotlib',
 
     ],
     extras_require={
