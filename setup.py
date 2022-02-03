@@ -23,7 +23,7 @@ def read(*names, **kwargs):
 
 setup(
     name='Audio-proc-lib',
-    version='0.0.2',
+    version='0.0.3',
     
     license='MIT',
     description='A library that contains basic audio signal processing functionalities',
@@ -73,7 +73,7 @@ setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-        'Plotting_funcs==0.0.2',
+        'Plotting_funcs==0.0.3',
         'youtube_dl',
         'scipy',
         'numpy',
