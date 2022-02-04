@@ -73,7 +73,7 @@ setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-        'Plotting_funcs==0.0.3',
+        'Plotting_funcs',
         'youtube_dl',
         'scipy',
         'numpy',
