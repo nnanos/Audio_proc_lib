@@ -23,7 +23,7 @@ def read(*names, **kwargs):
 
 setup(
     name='Audio-proc-lib',
-    version='0.0.4',
+    version='0.0.5',
     
     license='MIT',
     description='A library that contains basic audio signal processing functionalities',

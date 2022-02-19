@@ -4,7 +4,7 @@ import librosa.display
 import numpy as np
 from scipy.linalg import toeplitz
 #from scipy.fftpack import fft,ifft
-from numpy.fft import fft,ifft
+from numpy.fft import fft,ifft,rfft,irfft
 from scipy import signal
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
@@ -317,6 +317,16 @@ def custom_LTI_filtering(filter_kernel,x):
 
     return np.real(ifft(outf))
 
+def custom_LTI_REAL_filtering(filter_kernel,x):
+
+    #neccesary padding to obtain Linear convolution
+    N = len(x)+len(filter_kernel)-1
+    xf = rfft(x,N)
+    hf = rfft(filter_kernel,N)
+    outf = hf*xf
+
+    return np.real(irfft(outf))    
+
 def filtering_using_wind(x,fs,fc):
     #filtering using real valued window
 
@@ -331,7 +341,29 @@ def filtering_using_wind(x,fs,fc):
 
     return out,H
 
+def FIR_filt_design(fs,trans_width,fc,ripple_db):
 
+    # The Nyquist rate of the signal.
+    nyq_rate = fs / 2.0
+
+    # The desired width of the transition from pass to stop,
+    # relative to the Nyquist rate.  We'll design the filter
+    # with a 5 Hz transition width.
+    width = trans_width
+
+    # The desired attenuation in the stop band, in dB.
+    ripple = ripple_db
+
+    # Compute the order and Kaiser parameter for the FIR filter.
+    N, beta = kaiserord(ripple_db, width)
+
+    # The cutoff frequency of the filter.
+    cutoff_hz = fc
+
+    # Use firwin with a Kaiser window to create a lowpass FIR filter.
+    taps = firwin(N, cutoff_hz/nyq_rate, window=('kaiser', beta))
+
+    return taps
 #------------------------------------------------------------------
 
 
@@ -694,86 +726,120 @@ if __name__ =='__main__':
     x,s = load_music()
     # x = x.astype(np.float64)
 
-    nsgt = instantiate_NSGT( x , s , "oct", 190 , s//2 , 12 )
-    #reconstruction error with upasmpling---------------------------
-    X = NSGT_forword(x,nsgt,pyramid_lvl = 3)
-
-
-    S = ALIAS_L(np.zeros(6),2)
-
-    tmp = get_vocals_drums_harmonic_hpss(x,s)
-
-    #sound_write(chenge_pitch_by_cqt(x,-1,s),s)
-
-    #mtp = librosa_features_extract('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/ThinkDSP-master/code/audio_processing/ISA/J Dilla - BillyBrooksBaatin.wav')
-
-    tmp = HPSS_ALG_orig(x,44100,1024,256,filter_len_per=31,filter_len_harm=31)
-
-    (2**(37/12))*32.7
-    nsgt = instantiate_NSGT( x , s , "oct", 32.7 , s//2-1 , 12 )
-    X = NSGT_forword(x,nsgt,pyramid_lvl = 0)
-    a = list(map(lambda x: np.argmax(np.abs(x)),X.T))
-    #plt.hist(a)
-
-    tmp0,tmp1 = np.histogram(a)
-    
-    # s = 1000
-    # x = get_cos(124,0,1,s)
-
-    #x,s = librosa.load('/home/nnanos/Downloads/334538__teddy-frost__c4(1).wav',sr=44100)
-    #x,s = librosa.load('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/ThinkDSP-master/code/low-funky-bass-line_96bpm.wav',sr=44100)  
-    #change_pitch_of_note(x,440,s)
-    
-
+    #IF IT is odd then check if its even then we have to do smthing
+    h = FIR_filt_design(44100,0.003,200.0,60.0)
+    out1=custom_LTI_REAL_filtering(h,x[:len(x)-1])
+    out2 = custom_LTI_filtering(h,x[:len(x)-1])
     norm = lambda x: np.sqrt(np.sum(np.abs(np.square(x))))
+    print(norm(out2-out1)/norm(out2))
 
-    #compare with librosa CQT----------------------------------
-    X1 = librosa.cqt(y=x, sr=s, hop_length=64, n_bins=7*12,bins_per_octave=12)
-    shape_lib = X1.shape
-    s_r_lib = librosa.icqt(C=X1, sr=s, hop_length=64,bins_per_octave=12)
-    rec_err_lib = norm(x[:len(s_r_lib)]-s_r_lib)/norm(x)
-    #---------------------------------------------------------
-
-    nsgt = instantiate_NSGT( x , s , "oct", 190 , s//2 , 12 )
-    #reconstruction error with upasmpling---------------------------
-    X = NSGT_forword(x,nsgt,pyramid_lvl = 3)
-    shape_sub = X.shape
-    #h = create_gaussian_kernel(sigma=1)
-    #s_r = LTI_filtering(h,NSGT_backward(X,nsgt))
-    s_r_sub = NSGT_backward(X,nsgt,pyramid_lvl = 3)
-    rec_err_sub = norm(x-s_r_sub)/norm(x)
-    #--------------------------------------------------------------
-
-    #comparing the reconstruction error with full (without subsampling)-------
-    c_full = np.array( nsgt.forward(x) )
-    shape_full = c_full.shape
-    #reconstruct
-    s_r_full = nsgt.backward(c_full)
-    rec_err_full = norm(x-s_r_full)/norm(x)
-    #--------------------------------------------------
-
-    print("Reconstruction error full: %.3e \t shape: %s \nReconstruction error pyramid: %.3e \t shape: %s \nReconstruction error librosa: %.3e \t shape: %s "%(rec_err_full,shape_full,rec_err_sub,shape_sub,rec_err_lib,shape_lib))
-
-    change_pitch_of_note1(x,240,s)
-    
-    X,_ = get_spectrogram_custom1(x,4096,1024)
-    y_recon = get_inverse_stft1(X,1024)
-
-    y = get_cos(100,1,4096)
-    D = get_dft_mtx(4096)
+    #even case:
+    hf = fft(h)
+    #output of rfft:
+    hf_half = hf[:len(hf)//2+1]
+    #this is what irfft calculates given the hf_half:
+    hf_rec = np.concatenate((hf_half,np.flip(np.conj(hf_half[1:len(hf_half)-1]))))
 
 
-    ksi_min = 16.35
-    ksi_max = 7902.13
-    B = 12
-    M = np.ceil(12*np.log2(ksi_max/ksi_min)+1)
-    m = np.arange(M)+1
-    fr_range = ksi_min*(2**((m-1)/B))
 
-    nsgt = instantiate_NSGT( x , s , "oct", ksi_min , ksi_max , B )
-    X = NSGT_forword(x,nsgt,pyramid_lvl = 0)
+    h_odd = h[:len(h)-1]
+    hf_odd = fft(h_odd)
+    hf_odd_half = hf_odd[:len(hf_odd)//2+1]
+    hf_odd_rec = np.concatenate((hf_odd_half,np.flip(np.conj(hf_odd_half[1:len(hf_odd_half)-1]))))
 
-    plt.imshow(librosa.amplitude_to_db(np.abs(X)),aspect="auto",origin="lower",extent=[0,X.shape[1],ksi_min,ksi_max])
+
+
+
+
+
+    # def irfft_custom(xf_half,flag):
+        
+    #     #N = len(x)
+        
+    #     #checking if its odd
+    #     if flag:
+    #         #odd case:
+    #         xf_rec = np.concatenate((xf_half,np.flip(np.conj(xf_half[1:len(xf_half)-1]))))
+    #         x_rec = np.real(ifft(xf_rec))
+
+    #     else:
+    #         #even case:
+    #         #this is what irfft calculates given the xf_half:
+    #         xf_rec = np.concatenate((xf_half,np.flip(np.conj(xf_half[1:len(xf_half)-1]))))
+    #         x_rec = np.real(ifft(xf_rec))
+
+    #     return x_rec    
+
+    # def rfft_custom(x):
+        
+    #     N = len(x)
+        
+    #     #checking if its odd
+    #     if N%2:
+    #         #odd case:
+    #         flag=1
+    #         #converting to even
+    #         x_even = x[:N-1]
+    #         xf_even = fft(x_even)
+    #         xf_half = xf_even[:N//2+1]
+            
+
+    #     else:
+    #         #even case (painless):
+    #         flag=0
+
+    #         xf = fft(x)
+
+    #         xf_half = xf[:N//2+1]
+
+    #     return xf_half,flag   
+        
+    def rfft_custom(x):
+        N = len(x)
+        N_new = 1 + N//2 
+        xf_half = fft(x)[:N_new]
+
+        return xf_half                   
+
+    def irfft_custom(xf_half):
+        
+        xf_full =  np.concatenate((xf_half,np.flip(np.conj(xf_half[1:len(xf_half)-1]))))
+
+        return np.real(ifft(xf_full))
+
+        
+
+    def rfft_custom(x):
+        N = len(x)
+        N_new = 1 + N//2 
+        xf_half = fft(x,N_new)
+
+        return xf_half                   
+
+    def irfft_custom(xf_half):
+        
+        xf_full =  np.concatenate((xf_half,np.flip(np.conj(xf_half[1:len(xf_half)-1]))))
+
+        return np.real(ifft(xf_full))
+
+
+
+    xf = rfft_custom(x[:len(x)-1])
+    x_rec = irfft_custom(xf)
+
+    xf1 = rfft(x[:len(x)-1])
+    x_rec1 = irfft(xf1)
+
+
+    print(norm(x_rec1-x_rec)/norm(x_rec1))
+
+    xf = rfft_custom(x)
+    x_rec = irfft_custom(xf)
+
+    xf1 = rfft(x)
+    x_rec1 = irfft(xf1)
+
+    print(norm(x_rec1-x_rec)/norm(x_rec1))      
 
 
 
@@ -808,85 +874,3 @@ def ALIAS_L(x,L):
 
     return S
 
-
-'''
-x1,s = librosa.load('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/ThinkDSP-master/code/low-funky-bass-line_96bpm.wav',sr=44100) 
-nsgt = instantiate_NSGT( x , s , "oct", 30 , s//2 , 12 )
-X = NSGT_forword(x,nsgt,pyramid_lvl = 0)
-sound_write(NSGT_backward(np.roll(X1,-1,axis=0),nsgt,pyramid_lvl = 0,s)
-,s)
-librosa.display.specshow(librosa.amplitude_to_db(np.abs(np.roll(X1,20,axis=0)), ref=np.max),
-                        sr=s, x_axis='time', y_axis='cqt_hz')
-plt.colorbar(format='%+2.0f dB')
-plt.title('Constant-Q power spectrum')
-plt.tight_layout()
-
-
-
-    tmp1 = np.eye(N_samples//2)
-    tmp2 = np.zeros((N_samples//2,N_samples//2))
-
-    D_N = np.concatenate((tmp1,tmp2) , axis=0)
-    e2 = np.array([1,0])
-    Downsampling_matrix = np.kron(D_N,e2)   
-    D_N = np.concatenate((tmp1,tmp2) , axis=0)
-    e2 = np.array([1,0])
-    Downsampling_matrix = np.kron(D_N,e2)
-'''
-
-'''
-basis, lengths = librosa.filters.constant_q(22050, filter_scale=0.5)
-for filt in basis:
-    #plot_magnitude_fft(fft(filt),0,22050)
-    plt.semilogx(np.abs(fft(filt)[:(len(filt)//2)]))
-
-basis, lengths = librosa.filters.constant_q(44100, filter_scale=0.5)
-bas_tmp = basis[:12]
-for filt in bas_tmp:
-    #plot_magnitude_fft(fft(filt),0,22050)
-    plt.semilogx(np.abs(fft(filt)[:(len(filt)//2)]))
-
-
-next((i for i, x in enumerate(basis[50,:]) if x),None)
-C = np.array( list( map(lambda filt: LTI_filtering(filt,x),basis) ) )
-
-'''
-
-'''
-nsgt = instantiate_NSGT( x , s , 'oct',32.7,s//2,12,multithreading=False)
-C_nsgt = NSGT_forword(x,nsgt)
-
-#tmp contains a list of (cA,cD) (for each row freq bin)
-tmp = list( map( lambda row: pywt.dwt(row, 'db2') , C_nsgt) )
-
-#subsampled_C contains the subsampled (rowwise) CQT NSGT (each row is a cA)
-subsampled_C = np.array( list( map( lambda x: x[0] , tmp ) ) )
-
-#we can reconstruct with only the subsampled_C (the only artifact is some high frequency)
-#h = create_gaussian_kernel(sigma=1)
-#x_recon = LTI_filtering(h,NSGT_backward(subsampled_C,nsgt))
-
-
-high_freq_C = np.array( list( map( lambda x: x[1] , tmp ) ) )
-
-#reconstruction needs a list (tmp) of (cA_processed,cD) (for each row freq bin)
-tmp_recon = np.array( list( map( lambda coefs: pywt.idwt(coefs[0],coefs[1], 'db2') , tmp ) ) )
-x_recon = NSGT_backward(tmp_recon,nsgt)
-
-
-
-
-xf = fft(xf)
-xf_pad = np.concatenate((np.zeros(len(hf)//2),xf,np.zeros((len(hf)+1)//2)))
-h = create_gaussian_kernel((50,1),50)
-
-
-h = signal.firwin(11, 100,fs=44100)
-hf = fft(h)
-hf_pad = np.concatenate( (np.zeros( (len(xf)-len(hf))//2 ),hf, np.zeros( (len(xf)-len(hf))//2+1) ) ) 
-hf_pad = np.concatenate( (np.zeros( (len(xf))//2 ),hf, np.zeros( (len(xf))//2+1) ) ) 
-outf = hf_pad*xf
-sound_write(np.real(ifft(outf)),s)
-
-
-'''
