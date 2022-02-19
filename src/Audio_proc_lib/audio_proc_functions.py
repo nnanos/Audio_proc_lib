@@ -9,27 +9,58 @@ from scipy import signal
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
 import youtube_dl
-#from nsgt import NSGT, LogScale, LinScale, MelScale, OctScale
 from Plotting_funcs.Plotting_util_and_other import *
 import time
+import requests
+import re
+import os
+
 
 
 
 
 def load_music():
 
-    ytbe_flag = int(input('Press 2 if you want to load song segment of youtube\n Press 1 if you want to load a song segment of your pc\n: ') )
+    flag = int(input('Press 4 if you want to download the glockenspiel signal\nPress 3 if you want to download a sound file from web\nPress 2 if you want to load a song segment of youtube\nPress 1 if you want to load a song segment of your pc\n: ') )
 
-    #GETTING TRACK FROM YOUTUBE-------------------------------------
-    def my_hook(d):
-        if d['status'] == 'finished':
-            print('Done downloading...')
+    del_flag = int(input('Press 1 if you want to delete the downloaded file else 0\n:' ) )        
 
-    if ytbe_flag==2:
+    s = input("Give the desired samplerate\n:")  
 
-        url = input("Give the url of the song in youtube:") #@param {type:"string"}
-        start = int(input("Give the start sec:")) #@param {type:"number"}
-        stop = int(input("Give the stop sec:")) #@param {type:"number"}
+
+    if flag==4:
+        url = "https://www.univie.ac.at/nonstatgab/signals/glockenspiel.wav"
+        r = requests.get(url, allow_redirects=True)
+        filename = 'glockenspiel.wav' 
+        open( filename , 'wb').write(r.content)
+        audio, s = librosa.load(filename, sr=int(s), mono=True)
+        if del_flag:
+            os.remove(filename)    
+
+
+
+
+
+    elif flag==3:
+        url = input("Give the url of the sound_file you want to be downloaded\n:") 
+        r = requests.get(url, allow_redirects=True)
+        #matches the last /...
+        filename = re.findall("/(?:.(?!/))+$", url)[0][1:]
+        open(filename, 'wb').write(r.content)        
+        audio, s = librosa.load(filename, sr=int(s), mono=True)
+        if del_flag:
+            os.remove(filename)            
+
+
+    elif flag==2:
+        #GETTING TRACK FROM YOUTUBE-------------------------------------
+        def my_hook(d):
+            if d['status'] == 'finished':
+                print('Done downloading...')        
+
+        url = input("Give the url of the song in youtube:") 
+        start = int(input("Give the start sec:")) 
+        stop = int(input("Give the stop sec:")) 
 
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -45,38 +76,25 @@ def load_music():
             info = ydl.extract_info(url, download=False)
             status = ydl.download([url])
 
-        s = input("Give the desired samplerate (recommended 11025 for faster processing) :")
 
-        audio, s = librosa.load(info.get('title', None) + '.wav', sr=int(s), mono=True)
+        filename = info.get('title', None) + '.wav'
+        audio, s = librosa.load(filename, sr=int(s), mono=True)
+        if del_flag:
+            os.remove(filename)            
 
-    elif ytbe_flag==1:
-        song_path = input("Give the path of the .wav file that you want to create the pyramids for : ")
-        s = input("Give the desired samplerate (recommended 11025 for faster processing) :")  
-        start = int(input("Give the start sec:")) #@param {type:"number"}
-        stop = int(input("Give the stop sec:")) #@param {type:"number"}
+    elif flag==1:
+        song_path = input("Give the path of the .wav file that you want to process\n: ")
         audio , s = librosa.load(song_path,sr=int(s))
 
-    
-    # else:
-    # #    audio,s = librosa.load('/home/nnanos/Desktop/ThinkDSP-master-20200928T154642Z-001/musicradar-bass-guitar-samples/Bass/bass_tones_long&tremolo/long002.wav',sr=44100) 
-    #     url = "https://www.youtube.com/watch?v=qY2WHqvRlFY"
-    #     ydl_opts = {
-    #         'format': 'bestaudio/best',
-    #         'postprocessors': [{
-    #             'key': 'FFmpegExtractAudio',
-    #             'preferredcodec': 'wav',
-    #             'preferredquality': '44100',
-    #         }],
-    #         'outtmpl': '%(title)s.wav',
-    #         'progress_hooks': [my_hook],
-    #     }
-    #     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-    #         info = ydl.extract_info(url, download=False)
 
 
-    if ytbe_flag:
+    if (flag==1 or flag==3 or flag==2):
+        start = int(input("Give the start sec:")) 
+        stop = int(input("Give the stop sec:"))             
         if not(stop>len(audio)*(1/s)):
-            audio = audio[ start*s:stop*s]
+            audio = audio[ start*s:stop*s]        
+    
+
 
     return audio , s
     #------------------------------------------------------------------
