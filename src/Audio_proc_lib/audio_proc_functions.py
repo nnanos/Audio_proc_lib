@@ -355,13 +355,13 @@ def FIR_filt_design(fs,trans_width,fc,ripple_db):
     ripple = ripple_db
 
     # Compute the order and Kaiser parameter for the FIR filter.
-    N, beta = kaiserord(ripple_db, width)
+    N, beta = signal.kaiserord(ripple_db, width)
 
     # The cutoff frequency of the filter.
     cutoff_hz = fc
 
     # Use firwin with a Kaiser window to create a lowpass FIR filter.
-    taps = firwin(N, cutoff_hz/nyq_rate, window=('kaiser', beta))
+    taps = signal.firwin(N, cutoff_hz/nyq_rate, window=('kaiser', beta))
 
     return taps
 #------------------------------------------------------------------
