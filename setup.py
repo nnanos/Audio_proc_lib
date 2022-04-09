@@ -23,14 +23,15 @@ def read(*names, **kwargs):
 
 setup(
     name='Audio-proc-lib',
-    version='0.0.5',
+    version='0.0.6',
     
     license='MIT',
     description='A library that contains basic audio signal processing functionalities',
-    long_description='%s\n%s' % (
-        re.compile('^.. start-badges.*^.. end-badges', re.M | re.S).sub('', read('README.rst')),
-        re.sub(':[a-z]+:`~?(.*?)`', r'``\1``', read('CHANGELOG.rst'))
-    ),
+    # long_description='%s\n%s' % (
+    #     re.compile('^.. start-badges.*^.. end-badges', re.M | re.S).sub('', read('README.rst')),
+    #     re.sub(':[a-z]+:`~?(.*?)`', r'``\1``', read('CHANGELOG.rst'))
+    # ),
+    long_description = 'A library that contains basic audio signal processing functionalities',
     author='Nanos Nikolaos',
     author_email='nnanos@ceid.upatras.gr',
     url='https://github.com/nnanos/Audio_proc_lib',

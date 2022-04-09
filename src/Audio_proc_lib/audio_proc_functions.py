@@ -1,10 +1,11 @@
+from math import remainder
 import soundfile as sf 
 import librosa
 import librosa.display
 import numpy as np
 from scipy.linalg import toeplitz
 #from scipy.fftpack import fft,ifft
-from numpy.fft import fft,ifft,rfft,irfft
+from numpy.fft import fft,ifft,rfft,irfft,fftshift
 from scipy import signal
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
@@ -516,6 +517,36 @@ def estimate_PSD(x):
 
     return normalized_freq, Pxx_den
 
+def estimate_impulse_resp():
+    #CALCULATE THE IMPULSE RESPONSE OF A SYSTEM WITH THE SWEEP METHOD
+    #X_IN: the original sweep that we apply to the system (sweep.wav in the sound folder)
+    #X_OUT: the output of the system (drag the pad from the espi to the sound folder)
+
+    print("GIVE THE SWEEP INPUT\n")
+    x_in,s = load_music()
+
+    print("GIVE THE OUTPUT OF THE SYSTEM TO THE SWEEP INPUT\n")
+    x_out,s = load_music()
+
+    #get inverse filter for deconv:
+    f_x_in = fft(x_in)
+    inv_f_x_in = 1/f_x_in
+    x_in_inv = np.real(ifft(inv_f_x_in))
+
+
+    #Calcultaing the impulse response throughout deconvolution:
+    h_est = np.convolve(x_in_inv,x_out,"same")  
+
+    #plotting----------------------------------------------------------------------------------------------
+    # fk = (np.arange(len(h_est))*s)/len(h_est)
+    # #fk[np.argmax(np.abs(fft(h_est))[:len(h_est)//2])]
+    # plt.plot(fk[:len(h_est)//2],np.abs(fft(h_est))[:len(h_est)//2])
+
+    return h_est , s
+
+
+
+
 def periodic_extension(x,nb_periods,win_type,zero_padd):
 
     silent_region = np.zeros(zero_padd)
@@ -721,10 +752,196 @@ def create_chord():
     return ch
 
 
+def get_filter_bank():
+    F = get_frequency_notes()
+
+    for i in range(len(F)):
+        w = create_desiered_window()
+        cos = complex_exp(16,0,len(w)/1024,1024)
+
+
+
+
+
+def ALIAS_L(x,M):
+
+    #This function implements the periodic extension (or periodization) 
+    #with period M of a finite duration signal 
+    #
+    # M needs to be power of 2 
+
+    #IF THE SUPPORT OF f IS GREATER THAN M -> THEN WE WILL GET ALLIASING
+
+    #Zero padding to the next power of 2 if L is not a power of 2
+    x = PadRight(x)
+
+    L = len(x)
+    b = int(L/M)
+
+    #The rows of S contains the segments
+    S = np.reshape(x, (b,M),order="C")
+
+    x_per = S.sum(0)
+
+    return x_per    
+
+def padding_or_not(x,M,flag):
+    #FUNCTION to PADD or TRUNCATE a signal x in order 
+    #for it's length to be perfectly divisible by M ( L=k*M i.e. L is an integer multiple of M) 
+
+    L = len(x)
+    reminder = int(L%M)
+
+    if reminder:
+        #L%M!=0 (not perfect division)
+
+        if flag:
+            #ZERO PADDING CASE:
+
+            #Find the number of zeros that we will pad
+            nb_zeros = int( M*np.ceil(L/M) - L )
+            x_new = np.concatenate(( x , np.zeros(nb_zeros) ))
+
+        else:
+            #TRUNCATING SAMPLES CASE:
+            trunc_until = int(L - reminder)
+            x_new = x[:trunc_until] 
+
+    return x_new
+
+
+def ALIAS_L_V2(x,M,flag):
+
+    #This function implements the periodic extension (or periodization) 
+    #with period M of a finite duration signal 
+    #
+    # M need NOT be power of 2
+    # flag indicates if padding is going to be used when L%M!=0 (not perfect division) 
+
+    #IF THE SUPPORT OF f IS GREATER THAN M -> THEN WE WILL GET ALLIASING
+
+
+    x_new = padding_or_not(x,M,flag)    
+
+    L_new = len(x_new)
+
+
+    b = int(L_new/M)
+
+    #The rows of S contains the segments
+    S = np.reshape(x_new, (b,M),order="C")
+
+    x_per = S.sum(0)
+
+    return x_per       
+
+
 if __name__ =='__main__':
     #load music
     x,s = load_music()
+    x_per = ALIAS_L_V2(x,1050,0)
     # x = x.astype(np.float64)
+  
+
+    #ESTIMATE FREQ RESPONSE OF A FILTER-------------------------------------------
+    #input sweep.wav    >   /home/nnanos/Desktop/sounds/sweep_mono.wav
+    #output sweep.wav   >   /home/nnanos/Desktop/sounds/sweep_rec.wav
+
+    
+    # h_est,s = estimate_impulse_resp()
+    # L= len(h_est)
+    # fk = (np.arange(L)*s)/L
+    # #fk[np.argmax(np.abs(fft(h_est))[:L//2])]
+    # plt.plot(fk[:L//2],np.abs(fft(h_est))[:L//2])
+
+    # #periodization
+    # M=512
+    # b=L/M
+    # S = ALIAS_L(h_est,M)
+    # h_per = S.sum(0)
+    # fk = (np.arange(M)*s)/M
+    # plt.figure()
+    # plt.plot(fk[:M//2],np.abs(fft(h_per))[:M//2])
+    #-------------------------------------------------------------------------------------
+
+
+
+
+    #SAMPLING AND PERIODIZATION______________---------------
+
+    # x = np.hanning(1024)
+    # x = np.concatenate((x,np.zeros(len(x))))
+
+
+
+    L = len(x)
+    y = np.zeros(L)
+    support = 4*1024
+    y[110*1024:110*1024+support]=np.hanning(support)
+    z = x*y
+
+
+    #sampling in time...what is the effect in frequency
+    N = len(z)
+    k = np.arange(N)
+    fk = (s/N)*k
+    # fk_shifted = np.fft.fftshift(fk)
+    # fk_shifted[:len(fk)//2]*=-1
+    fk_shifted = np.concatenate( (fk[:len(fk)//2]*(-1),fk[:len(fk)//2]) )
+    y = z.copy()
+    y[::2] = 0
+    plt.plot(fk_shifted,np.abs(np.fft.fftshift(fft(z))))
+    plt.title("undecimated signal")
+    plt.figure()
+    plt.plot(fk_shifted,np.abs(np.fft.fftshift(fft(y))))
+    plt.title("decimated signal")
+    
+    plt.show()
+
+    # #sampling in frequency...what is the effect in time
+    
+
+
+    # fx = fft(z)
+    # fx[::2]=0
+
+    # t = np.linspace(-3,3,L)
+    
+    # plt.plot(t,z)
+    # plt.title('$x(t)$')
+    # plt.figure()
+    # #plt.plot(t,x)
+    # plt.plot(t,ifft(fx))
+    # plt.title('$\sim{x}(t)$')
+
+    # plt.show()
+
+
+
+
+
+    zf_full = fft(z)
+
+    #periodization M>support:
+    M = support*2
+    b = int(L/M)
+    z_per = np.real(ifft(zf_full[::b]))
+    z_per_not_Alliased = ALIAS_L(z,M)
+
+
+
+    #periodization M<support:
+    M = int(support/2)
+    b = int(L/M)
+    z_per = np.real(ifft(zf_full[::b]))    
+    z_per_Alliased = ALIAS_L(z,M)
+
+    plt.plot(20*np.log10(np.abs(fft(z_per_Alliased,norm="forward"))/0.5))
+    plt.ylabel("Amplitude [dB-FS]")
+
+    #--------------------------------------------------------------------------------------------------------------
+
+    
 
     #IF IT is odd then check if its even then we have to do smthing
     h = FIR_filt_design(44100,0.003,200.0,60.0)
@@ -846,31 +1063,38 @@ if __name__ =='__main__':
     a = 0
 
 
-def get_filter_bank():
-    F = get_frequency_notes()
 
-    for i in range(len(F)):
-        w = create_desiered_window()
-        cos = complex_exp(16,0,len(w)/1024,1024)
+# s,_ = librosa.load("/home/nnanos/Desktop/sounds/D4.wav",44100)
+
+# N = len(s)
+# t = np.arange(N)*(1/44100)
+# n = np.cos(2*np.pi*413*t)
 
 
-def ALIAS_L(x,L):
+# x = n + s*0.5
 
-    '''
-    if len(x)mod(2):
-        x = np.concatenate((x,0))
+# xf = np.abs(fft(x,norm="forward"))
 
-    x.reshape((,L))
-    '''
-    M = len(x)/L
-    mod = len(x)%M
-    S = []
-    if mod :
-        x = x[:len(x)-mod]
-        #getting the segments of the signal (the columns contain the segments of nfft size )
-        S = np.reshape(x, (-1, M)).T
+# k = np.arange(N)
+# fk = (44100/N)*k
 
-    S = np.reshape(x, (-1, int(M))).T
 
-    return S
+# #FILTERING--------------
+# h_est,s = estimate_impulse_resp()
+# L= len(h_est)
+# fk = (np.arange(L)*s)/L
+# #fk[np.argmax(np.abs(fft(h_est))[:L//2])]
+# plt.plot(fk[:L//2],np.abs(fft(h_est))[:L//2])
 
+# #periodization
+# # M=512
+# # b=L/M
+# # S = ALIAS_L(h_est,M)
+# # h_per = S.sum(0)
+# # fk = (np.arange(M)*s)/M
+# # plt.figure()
+# # plt.plot(fk[:M//2],np.abs(fft(h_per))[:M//2])
+
+
+# x_filt = np.convolve(h_est,x,'same')
+# xf_filt = np.abs(fft(x_filt,norm="forward"))
